@@ -44,6 +44,26 @@ if [[ -f "${VIRTIO_ISO}" ]]; then
     VIRTIO_FLAG="-drive file=${VIRTIO_ISO},media=cdrom,index=1,readonly=on"
 fi
 
+# Display mode: GL passthrough (default) vs basic VirtIO
+# GL passthrough makes WebGL renderer reflect the host GPU — required to pass
+# Proctorio's WebGL renderer check. Falls back gracefully if virgl unavailable.
+#
+# Override with: DISPLAY_MODE=basic bash vm/launch.sh
+DISPLAY_MODE="${DISPLAY_MODE:-gl}"
+if [[ "${DISPLAY_MODE}" == "gl" ]]; then
+    if glxinfo 2>/dev/null | grep -q "OpenGL version"; then
+        DISPLAY_FLAGS="-device virtio-vga-gl -display gtk,gl=on"
+        echo "[*] Display mode: VirtIO-GL (host GPU passthrough via virgl)"
+    else
+        DISPLAY_FLAGS="-device virtio-vga -display gtk"
+        echo "[!] Warning: glxinfo not found or OpenGL unavailable. Falling back to basic display."
+        echo "    WebGL renderer will expose VirtIO strings. Use DISPLAY_MODE=basic to suppress this warning."
+    fi
+else
+    DISPLAY_FLAGS="-device virtio-vga -display gtk"
+    echo "[*] Display mode: basic VirtIO (no GL passthrough)"
+fi
+
 echo "[*] Starting Windows VM with anti-detection configuration..."
 
 exec qemu-system-x86_64 \
@@ -90,10 +110,17 @@ exec qemu-system-x86_64 \
     -device e1000e,netdev=net0,mac="${MAC_ADDR}" \
 
     # ----------------------------------------------------------------
-    # Display: virtio-vga — no SVGA/VMware identifiers
+    # Display: virtio-vga-gl with OpenGL passthrough (default mode)
+    #   gl=on passes the host GPU through VirtIO-GPU/virgl protocol.
+    #   Inside the VM, the WebGL renderer string reflects the host GPU
+    #   (e.g., "ANGLE (Intel, Intel(R) UHD Graphics 630, OpenGL 4.6)")
+    #   rather than a Red Hat/VirtIO/llvmpipe string — critical for
+    #   defeating Proctorio's WebGL renderer check.
+    #
+    #   Requires host support: glxinfo | grep "OpenGL version" (need 3.3+)
+    #   Fallback: DISPLAY_MODE=basic bash vm/launch.sh  (no GL passthrough)
     # ----------------------------------------------------------------
-    -device virtio-vga \
-    -display gtk \
+    ${DISPLAY_FLAGS} \
 
     # ----------------------------------------------------------------
     # Clock: localtime base, host clock, slew drift correction

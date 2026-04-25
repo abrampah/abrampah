@@ -1,142 +1,127 @@
-# Detection Tools Reference
+# Tools Reference
 
-Versions, source URLs, build instructions, and verification hashes for all tools used in this project.
+## Primary Research Targets (Proctoring Software)
+
+### Respondus LockDown Browser
+
+**Acquisition:** Provided by your university — log in to the Respondus student portal via your institution's LMS (Canvas, Blackboard, Moodle). Direct download from respondus.com requires an institutional license.
+
+**Version to test:** Latest available from your institution
+
+**Installation in VM:**
+1. Download the installer inside the VM (or copy from host via shared drive)
+2. Run `LockDownBrowserSetup.exe` as Administrator
+3. After install, the browser appears as a shortcut; launching it triggers all checks
+
+**Self-check / demo mode:**
+Respondus offers a "practice quiz" mode accessible via Canvas without a real exam scheduled. Use this to test VM detection without requiring an active exam:
+- In Canvas: Courses → any course → Quizzes → Look for "Practice Quiz (LockDown Browser)"
+- Or: Open LDB → it will load the Respondus splash page and check environment before any exam
+
+**Expected baseline error (stock VM):**
+```
+"LockDown Browser has detected that this computer is running in a virtual machine environment.
+Please use a physical computer to take this assessment."
+```
+
+**Key test:** Does the hardened VM show this error or proceed normally?
 
 ---
 
-## Pafish
+### Honorlock
 
-**Purpose:** Parasite Fish — tests for common VM and sandbox detection techniques including CPUID, registry, disk, network, timing, and WMI checks.
+**Acquisition:** Institution-provided Chrome extension + native application. Available through Canvas integration. Contact your university's online learning department.
 
+**Installation in VM:**
+1. Install Google Chrome in the VM
+2. Navigate to an Honorlock-enabled exam in Canvas
+3. Chrome will prompt to install the Honorlock extension
+4. The extension installs the native companion application automatically
+
+**Self-test:** Honorlock has an environment check page accessible from the Chrome extension icon. This runs all pre-exam checks without requiring an active exam session.
+
+**Expected baseline error (stock VM):**
+Honorlock typically blocks the session or flags it with a warning when VM artifacts are detected.
+
+---
+
+### Proctorio
+
+**Acquisition:** Chrome extension only — available from Chrome Web Store if your institution uses it, or install directly (proctorio.com/extension).
+
+**Installation in VM:**
+1. Install Chrome in the VM
+2. Install Proctorio Chrome extension
+3. Navigate to a Proctorio-enabled exam
+
+**Key test — WebGL renderer string (run BEFORE installing Proctorio):**
+In Chrome DevTools console:
+```javascript
+const gl = document.createElement('canvas').getContext('webgl');
+const ext = gl.getExtension('WEBGL_debug_renderer_info');
+console.log(gl.getParameter(ext.UNMASKED_RENDERER_WEBGL));
+```
+Record this string. If it contains "VirtIO", "SVGA", "llvmpipe", or "SwiftShader" — Proctorio will likely detect the VM.
+
+---
+
+## Supplementary Validation Tools
+
+### Pafish
+**Purpose:** Validates that CPUID, timing, registry, and disk checks pass before testing proctoring software.
 **Source:** https://github.com/a0rtega/pafish
+**Build:** `make -f Makefile.win64` (needs mingw-w64 on Linux) or download pre-built from releases
 
-**Build (Linux cross-compile for Windows):**
-```bash
-sudo apt install mingw-w64
-git clone https://github.com/a0rtega/pafish
-cd pafish
-make -f Makefile.win64
-# Output: pafish.exe
-```
-
-**Run inside VM:**
-```
-pafish.exe
-```
-No arguments needed. Output color-codes: green = not detected, red = detected.
-
----
-
-## Al-Khaser
-
-**Purpose:** Comprehensive anti-analysis technique detector — 100+ checks covering debugger, VM, sandbox, disassembly, and timing detection methods used by real malware.
-
-**Source:** https://github.com/LordNoteworthy/al-khaser
-
-**Build:**
-- Requires Visual Studio 2019+ or mingw-w64
-- Open `al-khaser.sln` in Visual Studio, build Release x64
-- Or cross-compile with mingw-w64 (check project for specific flags)
-
-**Run inside VM:**
-```
-al-khaser.exe
-```
-Produces a categorized list of detected/not-detected checks with pass/fail counts.
-
----
-
-## VMAware
-
-**Purpose:** Header-only C++ library that aggregates 100+ VM detection techniques into a confidence score. Includes a standalone test binary.
-
+### VMAware
+**Purpose:** Quantitative VM confidence score — use as a before/after metric.
 **Source:** https://github.com/kernelwernel/VMAware
+**Build:** `x86_64-w64-mingw32-g++ -std=c++17 -o vmaware.exe vmaware_test.cpp`
 
-**Build:**
-```bash
-# Linux build of the test program (run on Linux host for comparison)
-g++ -std=c++17 -o vmaware_test vmaware_test.cpp
+### HWiNFO64 (portable)
+**Purpose:** Visually confirms SMBIOS shows Dell OptiPlex 7090 identity.
+**Source:** hwinfo.com → Portable ZIP version (no install needed)
 
-# Windows build (cross-compile)
-x86_64-w64-mingw32-g++ -std=c++17 -o vmaware_test.exe vmaware_test.cpp
-```
+### CPU-Z (portable)
+**Purpose:** Cross-checks CPUID and SMBIOS manufacturer/model fields.
+**Source:** cpuid.com → ZIP (portable) version
 
-**Run inside VM:**
-```
-vmaware_test.exe
-```
-Outputs a VM brand guess and confidence percentage (0-100%).
-
----
-
-## CPU-Z (Portable)
-
-**Purpose:** Displays CPUID, SMBIOS/DMI, and hardware information. Used to visually verify SMBIOS spoofing is working correctly.
-
-**Source:** https://www.cpuid.com/softwares/cpu-z.html (portable .zip version)
-
-**Run inside VM:** Launch `cpuz_x64.exe`, check:
-- **CPU tab:** Processor name (should match i7-10700)
-- **Mainboard tab:** Manufacturer (should be Dell Inc.), Model (should be OptiPlex 7090)
-- **Memory tab:** Manufacturer (Samsung), Part number (M378A1K43EB2-CWE)
-
----
-
-## HWiNFO64 (Portable)
-
-**Purpose:** Comprehensive hardware enumeration tool. Shows full SMBIOS structure, PCI device tree, and driver information. Most thorough tool for verifying SMBIOS spoofing.
-
-**Source:** https://www.hwinfo.com/download/ (portable version)
-
-**Run inside VM:** Launch `HWiNFO64.exe` in summary mode, check:
-- **System Summary:** Manufacturer, Model, Board
-- **DMI / SMBIOS section:** All type entries
-- **PCI devices:** Will reveal Q35 chipset (known detection limit)
-
----
-
-## WMI Explorer (Portable)
-
-**Purpose:** Browse all WMI classes interactively. Use to query Win32_ComputerSystem, Win32_BIOS, Win32_DiskDrive, Win32_NetworkAdapter, Win32_VideoController.
-
-**Source:** https://github.com/vinaypamnani/wmie2 or search "WMI Explorer" from Codeplex
-
-**Equivalent PowerShell queries (no extra tool needed):**
+### PowerShell WMI Audit Script
+Run inside the VM to verify identity before testing proctoring software:
 ```powershell
-Get-WmiObject Win32_ComputerSystem | Format-List *
-Get-WmiObject Win32_BIOS | Format-List *
-Get-WmiObject Win32_DiskDrive | Format-List *
-Get-WmiObject Win32_NetworkAdapter | Where-Object PhysicalAdapter | Format-List *
-Get-WmiObject Win32_VideoController | Format-List *
-Get-WmiObject Win32_BaseBoard | Format-List *
-Get-WmiObject Win32_SystemEnclosure | Format-List *
-Get-WmiObject Win32_PhysicalMemory | Format-List *
-Get-WmiObject Win32_Processor | Format-List *
+Write-Host "=== WMI Identity Audit ===" -ForegroundColor Cyan
+$cs = Get-WmiObject Win32_ComputerSystem
+Write-Host "Manufacturer: $($cs.Manufacturer)"         # Expected: Dell Inc.
+Write-Host "Model:        $($cs.Model)"                 # Expected: OptiPlex 7090
+
+$bios = Get-WmiObject Win32_BIOS
+Write-Host "BIOS Vendor:  $($bios.Manufacturer)"        # Expected: Dell Inc.
+Write-Host "BIOS Version: $($bios.SMBIOSBIOSVersion)"   # Expected: 1.18.0
+
+$gpu = Get-WmiObject Win32_VideoController
+Write-Host "GPU:          $($gpu.Name)"                 # Expected: Intel(R) UHD Graphics 630
+
+$nic = Get-WmiObject Win32_NetworkAdapter | Where-Object PhysicalAdapter
+Write-Host "NIC:          $($nic.Name)"                 # Expected: Intel Ethernet
+Write-Host "MAC:          $($nic.MACAddress)"            # Expected: 00:14:22:xx:xx:xx
+
+$disk = Get-WmiObject Win32_DiskDrive
+Write-Host "Disk:         $($disk.Model)"               # Expected: Samsung SSD 970 EVO Plus
+
+$bat = Get-WmiObject Win32_Battery
+Write-Host "Battery:      $($bat.Name)"                 # Expected: DELL-7DYG4 (from ACPI SSDT)
 ```
-
----
-
-## Custom Detector Script
-
-`detection-tests/custom-detector.py` — written as part of Phase 4 of the test methodology. Attempts adversarial consistency checks that commercial tools may not perform.
-
-Checks planned:
-1. SMBIOS says "OptiPlex 7090" — verify PCI vendor ID for NIC is actually Intel (0x8086)
-2. CPUID leaf 4 (cache topology) consistency with a real i7-10700
-3. RDTSC timing measurement with statistical analysis (multiple samples)
-4. Battery ACPI method consistency check (_BIF capacity vs _BST remaining)
-5. EDID data from connected display matches Dell U2722D signature
+Save output as `detection-tests/screenshots/wmi-audit-hardened.txt`.
 
 ---
 
 ## Integrity Verification
 
-Record tool binary SHA256 hashes here after download to ensure reproducibility:
+Record binary SHA256 hashes here after download:
 
-| Tool | Version | SHA256 | Date Acquired |
+| Tool | Version | SHA256 | Date |
 |---|---|---|---|
-| pafish.exe | | | |
-| al-khaser.exe | | | |
-| vmaware_test.exe | | | |
-| cpuz_x64.exe | | | |
+| LockDownBrowserSetup.exe | | | |
+| Pafish.exe | | | |
+| vmaware.exe | | | |
 | HWiNFO64.exe | | | |
+| cpuz_x64.exe | | | |

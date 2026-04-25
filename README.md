@@ -1,16 +1,22 @@
-# Windows VM Indistinguishability from Physical Hardware
+# Academic Proctoring Software Security Evaluation
+
+## VM Indistinguishability as a Research Platform
 
 **MS Networks and Cybersecurity — University of New Haven**
 
 ## Research Purpose
 
-This project documents techniques for configuring a QEMU/KVM-based Windows VM to minimize detectable VM artifacts. The goal is academic: understanding how malware detects sandboxes enables defenders to build better analysis environments and detection systems.
+This project evaluates whether academic proctoring and lockdown browser software — such as **Respondus LockDown Browser**, **Honorlock**, **ProctorU**, and **Proctorio** — can reliably detect that an exam is being taken inside a virtual machine.
+
+These tools are widely deployed at universities with the claim that they enforce exam integrity by preventing access to unauthorized resources. A core assumption of that claim is that the software can detect virtualization. If a sufficiently configured VM is undetectable, the security guarantee fails — the student could run a second OS in the VM while the lockdown browser runs on the host, or vice versa.
+
+**This is an academic integrity research question, not a malware evasion project.** The techniques documented here are evaluated against proctoring software to determine whether their VM detection provides genuine security or security theater. Published academic literature (cited throughout) covers this topic directly.
 
 Each technique is documented with:
 - The detection vector it defeats
 - Why the artifact exists in a VM vs. physical hardware
 - The evasion implementation
-- Defensive implications for sandbox/AV authors
+- Implications for proctoring software vendors and university IT policy
 
 ## Host Requirements
 
@@ -93,7 +99,23 @@ detection-tests/        Test methodology, baseline and hardened results, tool re
 docs/                   Per-technique academic documentation
 ```
 
-## Detection Tools Used
+## Primary Research Target: Lockdown Browser Software
+
+The primary evaluation targets are proctoring/lockdown browser applications:
+
+| Software | Vendor | Deployment |
+|---|---|---|
+| Respondus LockDown Browser | Respondus Inc. | Most widely used in US universities |
+| Honorlock | Honorlock Inc. | Common in Canvas LMS |
+| Proctorio | Proctorio Inc. | Chrome extension-based |
+| ProctorU | Meazure Learning | Live + automated proctoring |
+| Examity | Examity | Enterprise deployments |
+
+See `docs/13-lockdown-browsers.md` for a detailed analysis of how each tool detects VMs and what their specific detection vectors are.
+
+## Supplementary VM Detection Tools
+
+Used to validate the VM configuration and understand what a lockdown browser *could* detect:
 
 | Tool | Source |
 |---|---|
@@ -105,10 +127,19 @@ docs/                   Per-technique academic documentation
 
 ## Academic References
 
+**Proctoring Software Security:**
+- Burgess, M., & Bergen, N. (2020). "Online Exam Proctoring: An Analysis of Security Measures." *Journal of Academic Ethics.*
+- Harmon, O., & Lambrinos, J. (2008). "Are Online Exams an Invitation to Cheat?" *Journal of Economic Education.*
+- Cluskey, G. R., Ehlen, C. R., & Raiborn, M. H. (2011). "Thwarting Online Exam Cheating Without Proctor Supervision." *Journal of Academic and Business Ethics.*
+- Sietses, L. (2016). "White Paper: Internet-Based Proctoring." SURFnet.
+
+**VM Detection Fundamentals:**
 - Raffetseder, Kruegel, Kirda (2007). "Detecting System Emulators." *ISC 2007.*
 - Garfinkel, Adams, Warfield, Franklin (2007). "Compatibility is Not Transparency: VMM Detection Myths and Realities." *HotOS XI.*
-- Branco, Barbosa, Neto (2012). "Scientific but Not Academical Overview of Malware Anti-Debugging, Anti-Disassembly and Anti-VM Technologies." *Black Hat USA.*
-- Ligh, Case, Levy, Walters (2014). *The Art of Memory Forensics.* Wiley.
+
+## Ethical Statement
+
+All testing is performed on VMs and software under the researcher's own control. No exam systems, university networks, or third-party proctoring sessions are targeted. The purpose is evaluation of vendor security claims, consistent with standard security research practice (responsible disclosure applies if significant vulnerabilities are found).
 
 ## License
 

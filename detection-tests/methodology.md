@@ -1,8 +1,8 @@
 # Detection Test Methodology
 
-## Purpose
+## Research Objective
 
-This document describes the exact procedure for running VM detection tools against the baseline (unmodified) and hardened (all evasion techniques applied) VM configurations. The incremental approach — applying one technique at a time — isolates which technique defeats which specific check.
+Determine whether academic proctoring software (Respondus LockDown Browser, Honorlock, Proctorio, ProctorU) can detect that an exam session is running inside a hardened QEMU/KVM virtual machine.
 
 ## Test Environment
 
@@ -14,124 +14,154 @@ This document describes the exact procedure for running VM detection tools again
 | QEMU machine type | q35 |
 | VM RAM | 8 GB |
 | VM vCPUs | 4 (2 cores × 2 threads) |
+| Claimed hardware identity | Dell OptiPlex 7090, Intel i7-10700 |
 
-## Tool Versions and Acquisition
+## Phase 1 — Baseline VM (no evasion)
 
-See `tools-reference.md` for exact source URLs, build instructions, and SHA256 hashes.
-
-| Tool | Version Tested | Run Location |
-|---|---|---|
-| Pafish | latest from git | Guest (Windows) |
-| Al-Khaser | latest from git | Guest (Windows) |
-| VMAware | latest from git | Guest (Windows) |
-| CPU-Z | latest portable | Guest (Windows) |
-| HWiNFO64 | latest portable | Guest (Windows) |
-| WMI Explorer | latest portable | Guest (Windows) |
-
-## Test Phases
-
-### Phase 1 — Baseline (no evasion)
+**Purpose:** Establish how proctoring tools behave against a stock QEMU VM with no hardening. Document which checks trigger, and what error messages appear.
 
 **Setup:**
-1. Launch QEMU with only basic parameters (no `-cpu` tricks, no `-smbios`, no timing flags)
-2. Install Windows 11 with default virtio drivers (NOT patched with driver-rename.py)
-3. Do NOT run registry-patch.ps1
-4. Take a snapshot named `baseline` before running tools
+1. Launch QEMU with only basic parameters (no `-cpu` tricks, no `-smbios`, default drivers)
+2. Install Windows 11 with default VirtIO drivers
+3. Take a snapshot named `baseline`
 
-**Execution:**
-1. Copy all tool binaries into the VM via shared drive or SMB
-2. Run Pafish.exe — screenshot all output; note RED (detected) vs GREEN (not detected) items
-3. Run al-khaser.exe — screenshot; note detected items
-4. Run VMAware-test.exe — note confidence percentage
-5. Open CPU-Z, HWiNFO64 — screenshot SMBIOS/manufacturer fields
-6. Run custom WMI query (see below) — screenshot output
+**Procedure for each proctoring tool:**
+1. Install the proctoring software per vendor instructions
+2. Navigate to a demo exam or the software's self-check page
+3. Note the exact outcome:
+   - Does the software launch?
+   - Does it display a "VM detected" or "unsupported environment" error?
+   - What is the exact error message? (Screenshot required)
+   - Does it launch with a warning but proceed?
+4. If the software launches, attempt to open a second application or browser tab to test isolation
+5. Document all observations in `results-baseline.md`
 
-**WMI query for baseline documentation:**
-```powershell
-Get-WmiObject Win32_ComputerSystem | Select-Object Manufacturer, Model, TotalPhysicalMemory
-Get-WmiObject Win32_BIOS | Select-Object Manufacturer, Version, SMBIOSBIOSVersion
-Get-WmiObject Win32_VideoController | Select-Object Name, DriverVersion
-Get-WmiObject Win32_NetworkAdapter | Where-Object {$_.PhysicalAdapter} | Select-Object Name, MACAddress
-Get-WmiObject Win32_DiskDrive | Select-Object Model, SerialNumber
-```
+**Error message logging is critical** — the exact text often reveals which check triggered (e.g., "Virtual machine detected" vs. "Unsupported graphics configuration" vs. "Please disable screen sharing software").
 
-5. Document all results in `results-baseline.md`
+## Phase 2 — Incremental Hardening
 
-### Phase 2 — Incremental Hardening
+Apply techniques in order, retesting proctoring software after each step. This identifies the minimum configuration needed to bypass each tool's detection.
 
-Apply techniques in this order (each depends on the previous being stable):
-
-| Step | Technique | Expected New Passes |
+| Step | Technique | Files Modified |
 |---|---|---|
-| 1 | CPUID: `hypervisor=off`, `kvm=off` | Pafish CPUID checks, KVM leaf checks |
-| 2 | Timing: `+invtsc`, disable HPET/kvmclock | Pafish/Al-Khaser timing checks |
-| 3 | SMBIOS: all `-smbios type=N` flags | HWiNFO manufacturer, WMI Win32_BIOS |
-| 4 | ACPI: fake battery SSDT | Battery presence check |
-| 5 | Storage: NVMe Samsung model string | WMI Win32_DiskDrive model check |
-| 6 | Network: Dell OUI MAC | MAC prefix check |
-| 7 | Driver INF rename (driver-rename.py) | Win32_NetworkAdapter name |
-| 8 | Registry patch (registry-patch.ps1) | Service enumeration checks |
-| 9 | UEFI (OVMF vs SeaBIOS) | BIOS vendor string check |
+| 1 | CPUID: `hypervisor=off`, `kvm=off` | `vm/launch.sh`, `vm/windows-stealth.xml` |
+| 2 | SMBIOS: Dell OptiPlex 7090 identity | Same — add all `-smbios type=N` flags |
+| 3 | Registry cleanup | Run `scripts/registry-patch.ps1` in guest |
+| 4 | Driver INF rename | Run `scripts/driver-rename.py` before reinstalling drivers |
+| 5 | Timing: `+invtsc`, disable HPET/kvmclock | `vm/launch.sh` clock section |
+| 6 | Storage model string | NVMe Samsung 970 model/serial |
+| 7 | Network MAC | `scripts/mac-spoof.sh` |
+| 8 | ACPI fake battery | `vm/acpi/build-acpi.sh` + `-acpitable` flag |
+| 9 | OVMF firmware | Replace SeaBIOS with OVMF |
 
 **For each step:**
-1. Modify `vm/launch.sh` to add only the new technique
-2. Reboot or recreate the VM from snapshot
-3. Run the full tool suite
-4. Record delta in `results-matrix.csv` — which checks changed from FAIL→PASS
-5. Screenshot the changed tool output in `screenshots/step-N-technique-name/`
+1. Apply only the new technique (revert to baseline, then apply steps 1 through N)
+2. Reboot VM
+3. Retest proctoring software
+4. Record whether behavior changed (new error, same error, software now launches)
+5. Screenshot new state
+6. Update `results-matrix.csv`
 
-### Phase 3 — Fully Hardened
+## Phase 3 — Fully Hardened
 
-All techniques applied simultaneously:
-1. Use the complete `vm/launch.sh` as committed
-2. Run `scripts/driver-rename.py` on virtio drivers before install
-3. Run `scripts/registry-patch.ps1` after install
-4. Full tool suite run
-5. Document remaining DETECTED items — these are expected research findings
+Apply all techniques simultaneously using the complete `vm/launch.sh`:
+1. Run `scripts/driver-rename.py` on virtio-win drivers before Windows install
+2. After install, run `scripts/registry-patch.ps1`
+3. Follow `scripts/post-install-checklist.md`
+4. Test all proctoring tools
 
-### Phase 4 — Custom Adversarial Detector
+Document in `results-hardened.md`.
 
-Write `custom-detector.py` (Windows, runs with Python for Windows) to attempt to catch inconsistencies introduced by our spoofing:
+## Phase 4 — WebGL Renderer Audit (Proctorio specific)
 
-```python
-# Check 1: SMBIOS says Dell OptiPlex but no battery (physical OptiPlex is desktop, no battery)
-# Actually this is our fake battery SSDT — so this should now be consistent.
+Proctorio reads the WebGL renderer string from JavaScript. This is separate from WMI/CPUID checks.
 
-# Check 2: MAC address Dell OUI but NIC model might be e1000e (Intel) — consistent.
+**Test procedure:**
+1. In the VM, open Chrome (not inside Proctorio)
+2. Open DevTools Console (F12)
+3. Run:
+   ```javascript
+   const canvas = document.createElement('canvas');
+   const gl = canvas.getContext('webgl');
+   const ext = gl.getExtension('WEBGL_debug_renderer_info');
+   console.log('Vendor:', gl.getParameter(ext.UNMASKED_VENDOR_WEBGL));
+   console.log('Renderer:', gl.getParameter(ext.UNMASKED_RENDERER_WEBGL));
+   ```
+4. Record the exact strings
 
-# Check 3: CPU says i7-10700 but CPUID leaf 4 (cache topology) may differ from real hardware.
+**Expected results by display configuration:**
 
-# Check 4: SMBIOS board product is "0TT6JF" — verify this is a real Dell board part number.
+| QEMU Display Option | Expected WebGL Renderer | Proctorio Result |
+|---|---|---|
+| `-device virtio-vga` (no GL) | "ANGLE (Red Hat, VirtIO ..." or software | DETECTED |
+| `-device virtio-vga,edid=on` | Same as above | DETECTED |
+| `-device virtio-vga-gl -display gtk,gl=on` | Host GPU renderer via VirtIO-GPU | Likely NOT DETECTED |
+| GPU passthrough (VFIO) | Real GPU string (e.g., NVIDIA GeForce) | NOT DETECTED |
+| `-device qxl-vga` | "ANGLE (VMware, SVGA3D...)" | DETECTED |
 
-# Check 5: Check for timing inconsistency — RDTSC delta over CPUID barrier > threshold.
-```
+Document the WebGL string in `results-hardened.md` under the Proctorio section.
 
-This adversarial check helps quantify the quality of the evasion and identifies remaining attack surface.
+## Phase 5 — Behavioral Observation (all tools)
+
+After the proctoring software launches successfully (not blocked by VM detection):
+
+1. **Screen share capture:** Start the exam session. In a separate window on the host (outside VM), observe what the proctor would see. The VM desktop should appear as a normal Windows environment.
+
+2. **Application blocking test:** While LockDown Browser is running inside the VM:
+   - Attempt to open Notepad inside the VM — should be blocked by LDB
+   - Switch to host OS — LDB cannot see or control the host OS
+   - Open a browser on the host — accessible, invisible to LDB
+
+3. **Document the isolation boundary** — what LDB controls (inside VM) vs. what it cannot see (host OS)
+
+This is the core research finding: even if LDB runs normally, its isolation is bounded by the VM boundary.
 
 ## Recording Results
 
-All results go into `results-matrix.csv` with the schema:
+### results-matrix.csv schema
 ```
-tool,version,technique_category,check_name,baseline_result,hardened_result,notes
+tool,version,check_name,baseline_result,step1_cpuid,step2_smbios,step3_registry,step4_drivers,step5_timing,step6_storage,step7_network,step8_acpi,hardened_result,notes
 ```
 
-Values for result columns: `DETECTED`, `NOT_DETECTED`, `N/A`, `ERROR`
-
-## Screenshots Convention
-
-Save screenshots as:
+### Screenshot convention
 ```
 screenshots/
   baseline/
-    pafish-baseline.png
-    al-khaser-baseline.png
-    hwinfo-smbios-baseline.png
+    rldb-baseline-error.png         — error message from stock VM
+    honorlock-baseline-error.png
+    proctorio-baseline-webgl.png    — WebGL renderer string from console
   step-01-cpuid/
-    pafish-after-cpuid-hide.png
-  step-07-registry/
-    al-khaser-after-registry-patch.png
+    rldb-after-cpuid-hide.png
   hardened-final/
-    pafish-final.png
-    al-khaser-final.png
-    hwinfo-smbios-final.png
+    rldb-launched.png               — LDB running successfully in hardened VM
+    honorlock-launched.png
+    proctorio-webgl-hardened.png    — WebGL renderer string in hardened VM
+    host-browser-open.png           — host OS browser accessible while LDB runs in VM
 ```
+
+## Success Criteria
+
+The research hypothesis is **confirmed** if:
+1. At least one proctoring tool launches without VM detection errors in the hardened VM
+2. While that tool runs, the host OS remains accessible
+3. The tool's exam isolation controls apply only inside the VM
+
+The research hypothesis is **partially confirmed** if:
+- Some tools are bypassed but others detect the VM
+- The WebGL check in Proctorio remains an unresolved detection vector
+
+**Either outcome is scientifically valid** — documenting that some tools detect the VM and others do not, with the specific differentiating checks identified, is a complete research finding.
+
+## Supplementary Tool Testing
+
+In addition to the proctoring software, run these tools to validate the VM's general posture:
+
+| Tool | Purpose |
+|---|---|
+| Pafish | Validates CPUID, timing, registry checks pass |
+| VMAware | Confidence score as a quantitative VM-likeness metric |
+| HWiNFO64 | Visually confirms SMBIOS identity (Dell OptiPlex 7090) |
+| CPU-Z | Cross-checks CPUID and SMBIOS |
+| Chrome DevTools | WebGL renderer string audit |
+
+These tools don't test proctoring software directly but confirm the VM hardening is working before the primary test.
