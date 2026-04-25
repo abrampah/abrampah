@@ -16,10 +16,10 @@ $WinISO  = "C:\VMs\isos\Win11_23H2_English_x64.iso"
 # https://fedorapeople.org/groups/virt/virtio-win/direct-downloads/latest-virtio/virtio-win.iso
 $VirtioISO = "C:\VMs\isos\virtio-win.iso"
 
-# OVMF (UEFI firmware) — comes with QEMU installer for Windows
-$OvmfCode         = "C:\Program Files\qemu\share\edk2-x86_64-code.fd"
-$OvmfVarsTemplate = "C:\Program Files\qemu\share\edk2-x86_64-vars.fd"
-$OvmfVars         = "C:\VMs\nvram\win11-stealth-vars.fd"
+# OVMF (UEFI firmware) — single-file mode (-bios flag)
+# edk2-x86_64-vars.fd is not included in the QEMU Windows package,
+# so we use the secure-code file directly as a BIOS image instead.
+$OvmfBios = "C:\Program Files\qemu\share\edk2-x86_64-secure-code.fd"
 
 # VM resources
 $VmRam            = "8G"

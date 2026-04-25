@@ -46,12 +46,11 @@ try {
 }
 
 # ── OVMF firmware ─────────────────────────────────────────────────────────────
-if (-not (Test-Path $OvmfVars)) {
-    Write-Host "[*] Copying OVMF VARS template..."
-    $OvmfVarsDir = Split-Path $OvmfVars
-    if (-not (Test-Path $OvmfVarsDir)) { New-Item -ItemType Directory -Path $OvmfVarsDir | Out-Null }
-    Copy-Item $OvmfVarsTemplate $OvmfVars
+if (-not (Test-Path $OvmfBios)) {
+    Write-Error "UEFI firmware not found: $OvmfBios`nCheck that QEMU installed correctly."
+    exit 1
 }
+Write-Host "[*] UEFI: $OvmfBios"
 
 # ── ACPI table ────────────────────────────────────────────────────────────────
 $AcpiArgs = @()
@@ -162,8 +161,7 @@ $QemuArgs = @(
     "-m", $VmRam,
     "-smp", "$VmCores,cores=$VmCoresPerSocket,threads=$VmThreads,sockets=$VmSockets"
 ) + $CpuArgs + @(
-    "-drive", "if=pflash,format=raw,readonly=on,file=$OvmfCode",
-    "-drive", "if=pflash,format=raw,file=$OvmfVars",
+    "-bios", $OvmfBios,
     "-drive", "file=$DiskImage,format=qcow2,if=none,id=drive0,cache=writeback,discard=unmap",
     "-device", "nvme,drive=drive0,serial=S4EWNX0R123456,model=Samsung SSD 970 EVO Plus 1TB"
 ) + $IsoArgs + @(
