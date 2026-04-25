@@ -1,0 +1,23 @@
+tool,version,technique_category,check_name,baseline_result,step1_cpuid,step2_timing,step3_smbios,step4_acpi,step5_storage,step6_network,step7_drivers,step8_registry,hardened_result,notes
+Pafish,latest,CPU,CPUID hypervisor present bit,DETECTED,,,,,,,,,,kvm=off + hypervisor=off clears ECX bit 31
+Pafish,latest,CPU,KVM CPUID leaf 0x40000000,DETECTED,,,,,,,,,,kvm=off hides KVM vendor string KVMKVMKVM
+Pafish,latest,CPU,Hyper-V CPUID leaf,DETECTED,,,,,,,,,,kvm hidden state=on in libvirt XML
+Pafish,latest,Timing,RDTSC delta over CPUID barrier,DETECTED,,,,,,,,,,+invtsc reduces delta; fundamental limit remains
+Pafish,latest,Timing,GetTickCount RDTSC correlation,DETECTED,,,,,,,,,,RTC slew correction + no kvmclock
+Pafish,latest,Registry,HKLM\HARDWARE\ACPI\DSDT BOCHS,DETECTED,,,,,,,,,,ACPI SSDT with Dell OEM ID + registry patch
+Pafish,latest,Registry,VM vendor software keys,DETECTED,,,,,,,,,,registry-patch.ps1 removes Oracle/VMware/QEMU keys
+Pafish,latest,Disk,Drive model contains VBOX or QEMU,DETECTED,,,,,,,,,,NVMe device with Samsung SSD 970 EVO Plus 1TB
+Pafish,latest,Network,MAC address VM vendor OUI,DETECTED,,,,,,,,,,mac-spoof.sh sets Dell OUI 00:14:22
+Pafish,latest,BIOS,Firmware vendor string BOCHS,DETECTED,,,,,,,,,,OVMF replaces SeaBIOS + SMBIOS type=0 vendor=Dell Inc.
+Pafish,latest,WMI,Win32_BIOS Manufacturer,DETECTED,,,,,,,,,,SMBIOS type=0 and type=1
+Al-Khaser,latest,CPU,CPUID hypervisor bit,DETECTED,,,,,,,,,,
+Al-Khaser,latest,CPU,KVM leaf detection,DETECTED,,,,,,,,,,
+Al-Khaser,latest,Timing,RDTSC timing attack,DETECTED,,,,,,,,,,
+Al-Khaser,latest,Registry,VM registry keys,DETECTED,,,,,,,,,,
+Al-Khaser,latest,Process,VM processes running,DETECTED,,,,,,,,,,No vmtoolsd or VBoxService installed
+Al-Khaser,latest,WMI,Win32_ComputerSystem VM strings,DETECTED,,,,,,,,,,SMBIOS overrides fix WMI results
+Al-Khaser,latest,Network,NIC driver name VirtIO,DETECTED,,,,,,,,,,driver-rename.py patches INF vendor strings
+VMAware,latest,Overall,VM confidence score,DETECTED,,,,,,,,,,Score should drop significantly after hardening
+VMAware,latest,CPU,Hypervisor CPUID,DETECTED,,,,,,,,,,
+VMAware,latest,SMBIOS,Manufacturer strings,DETECTED,,,,,,,,,,
+VMAware,latest,Timing,TSC offset detection,DETECTED,,,,,,,,,,

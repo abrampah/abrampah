@@ -1,0 +1,7 @@
+# Python dependencies for this project
+# Install with: pip3 install -r requirements.txt
+
+# construct: binary structure parsing/building (used by generate-edid.py advanced mode)
+construct>=2.10
+
+# No other runtime dependencies — scripts use stdlib only

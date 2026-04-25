@@ -1,0 +1,191 @@
+<!--
+  vm/windows-stealth.xml — libvirt domain definition
+  Import with: virsh define windows-stealth.xml
+  Start with:  virsh start windows-stealth
+  This file mirrors vm/launch.sh exactly. Keep both in sync when adding flags.
+-->
+<domain type="kvm">
+  <name>windows-stealth</name>
+  <uuid>44454c4c-4700-1052-8050-c3c04f325931</uuid>
+  <memory unit="GiB">8</memory>
+  <currentMemory unit="GiB">8</currentMemory>
+
+  <!-- ----------------------------------------------------------------
+       CPU: host-passthrough with hypervisor presence hidden
+       hypervisor feature disabled  — clears CPUID leaf 1 ECX bit 31
+       invtsc                       — invariant TSC (reduces timing delta)
+       rdtscp                       — expected on real i7-10700
+       kvm hidden                   — suppresses KVM CPUID leaves
+       vmport off                   — disables VMware backdoor I/O port 0x5658
+       hv vendor_id                 — overrides Hyper-V leaf vendor string
+  ---------------------------------------------------------------- -->
+  <cpu mode="host-passthrough" check="none" migratable="off">
+    <topology sockets="1" dies="1" cores="2" threads="2"/>
+    <feature policy="disable" name="hypervisor"/>
+    <feature policy="require" name="invtsc"/>
+    <feature policy="require" name="rdtscp"/>
+  </cpu>
+
+  <features>
+    <acpi/>
+    <apic/>
+    <smm state="on"/>
+    <kvm>
+      <hidden state="on"/>
+    </kvm>
+    <hyperv mode="passthrough">
+      <vendor_id state="on" value="AuthenticAMD"/>
+    </hyperv>
+    <vmport state="off"/>
+  </features>
+
+  <!-- ----------------------------------------------------------------
+       Clock: suppress all paravirt/hypervisor clock sources
+       kvmclock=no     — KVM paravirt clock reveals hypervisor
+       hpet=no         — HPET timing anomalies detectable
+       hypervclock=no  — Hyper-V synthetic timer unexpected on OptiPlex
+  ---------------------------------------------------------------- -->
+  <clock offset="localtime">
+    <timer name="rtc"         tickpolicy="catchup"/>
+    <timer name="pit"         tickpolicy="delay"/>
+    <timer name="hpet"        present="no"/>
+    <timer name="kvmclock"    present="no"/>
+    <timer name="hypervclock" present="no"/>
+  </clock>
+
+  <vcpu placement="static">4</vcpu>
+
+  <os firmware="efi">
+    <type arch="x86_64" machine="q35">hvm</type>
+    <firmware>
+      <feature enabled="yes" name="secure-boot"/>
+      <feature enabled="yes" name="enrolled-keys"/>
+    </firmware>
+    <boot dev="hd"/>
+    <boot dev="cdrom"/>
+  </os>
+
+  <pm>
+    <suspend-to-mem enabled="yes"/>
+    <suspend-to-disk enabled="yes"/>
+  </pm>
+
+  <devices>
+    <emulator>/usr/bin/qemu-system-x86_64</emulator>
+
+    <!-- ----------------------------------------------------------------
+         Storage: NVMe with Samsung identity strings
+         Model and serial visible in Device Manager and WMI Win32_DiskDrive
+    ---------------------------------------------------------------- -->
+    <disk type="file" device="disk">
+      <driver name="qemu" type="qcow2" cache="writeback" discard="unmap"/>
+      <source file="/var/lib/libvirt/images/win11-stealth.qcow2"/>
+      <target dev="nvme0n1" bus="nvme"/>
+      <address type="pci" domain="0x0000" bus="0x04" slot="0x00" function="0x0"/>
+    </disk>
+
+    <!-- Windows ISO (comment out after install) -->
+    <disk type="file" device="cdrom">
+      <driver name="qemu" type="raw"/>
+      <source file="/var/lib/libvirt/isos/Win11_23H2_English_x64.iso"/>
+      <target dev="sda" bus="sata"/>
+      <readonly/>
+    </disk>
+
+    <!-- VirtIO drivers ISO (comment out after install) -->
+    <disk type="file" device="cdrom">
+      <driver name="qemu" type="raw"/>
+      <source file="/var/lib/libvirt/isos/virtio-win-patched.iso"/>
+      <target dev="sdb" bus="sata"/>
+      <readonly/>
+    </disk>
+
+    <!-- ----------------------------------------------------------------
+         Network: e1000e (Intel NIC common in Dell OptiPlex)
+         MAC set to Dell OUI prefix — run mac-spoof.sh before starting
+    ---------------------------------------------------------------- -->
+    <interface type="bridge">
+      <mac address="00:14:22:ab:cd:ef"/>
+      <source bridge="br0"/>
+      <model type="e1000e"/>
+    </interface>
+
+    <!-- ----------------------------------------------------------------
+         Display: virtio-vga — no VMware SVGA or VirtualBox identifiers
+    ---------------------------------------------------------------- -->
+    <video>
+      <model type="virtio" vram="16384" heads="1"/>
+    </video>
+
+    <graphics type="vnc" port="-1" autoport="yes" listen="127.0.0.1">
+      <listen type="address" address="127.0.0.1"/>
+    </graphics>
+
+    <!-- ----------------------------------------------------------------
+         Input: USB tablet for accurate mouse — also signals human presence
+    ---------------------------------------------------------------- -->
+    <input type="tablet" bus="usb"/>
+    <input type="keyboard" bus="usb"/>
+
+    <!-- USB controller: EHCI (USB 2.0) — present in real OptiPlex -->
+    <controller type="usb" model="ehci"/>
+
+    <!-- ----------------------------------------------------------------
+         TPM: software TPM required for Windows 11
+         Requires swtpm running at /tmp/swtpm-sock before VM start:
+           swtpm socket --tpmstate dir=/tmp/swtpm --ctrl type=unixio,path=/tmp/swtpm-sock --tpm2 --daemon
+    ---------------------------------------------------------------- -->
+    <tpm model="tpm-tis">
+      <backend type="emulator" version="2.0"/>
+    </tpm>
+
+    <!-- QEMU guest agent channel — remove if concerned about agent detection -->
+    <channel type="unix">
+      <target type="virtio" name="org.qemu.guest_agent.0"/>
+    </channel>
+
+    <!-- Watchdog: common in real hardware -->
+    <watchdog model="i6300esb" action="reset"/>
+
+    <!-- Memory balloon: comment out to reduce VirtIO exposure -->
+    <!-- <memballoon model="virtio"/> -->
+    <memballoon model="none"/>
+
+    <!-- RNG: feed Windows entropy from host -->
+    <rng model="virtio">
+      <backend model="random">/dev/urandom</backend>
+    </rng>
+  </devices>
+
+  <!-- ----------------------------------------------------------------
+       SMBIOS overrides: Dell OptiPlex 7090 identity
+       These values appear in HWiNFO, CPU-Z, WMI Win32_ComputerSystem,
+       Win32_BIOS, Win32_BaseBoard, Win32_Processor, Win32_PhysicalMemory
+  ---------------------------------------------------------------- -->
+  <qemu:commandline xmlns:qemu="http://libvirt.org/schemas/domain/qemu/1.0">
+    <qemu:arg value="-smbios"/>
+    <qemu:arg value="type=0,vendor=Dell Inc.,version=1.18.0,date=11/02/2022,release=1.18"/>
+    <qemu:arg value="-smbios"/>
+    <qemu:arg value="type=1,manufacturer=Dell Inc.,product=OptiPlex 7090,version=Not Specified,serial=ABCD1234,uuid=44454C4C-4700-1052-8050-C3C04F325931,sku=OptiPlex 7090,family=OptiPlex"/>
+    <qemu:arg value="-smbios"/>
+    <qemu:arg value="type=2,manufacturer=Dell Inc.,product=0TT6JF,version=A01,serial=CN7692370D05F5."/>
+    <qemu:arg value="-smbios"/>
+    <qemu:arg value="type=3,manufacturer=Dell Inc.,version=Not Specified,serial=ABCD1234"/>
+    <qemu:arg value="-smbios"/>
+    <qemu:arg value="type=4,sock_pfx=CPU,manufacturer=Intel,version=Intel(R) Core(TM) i7-10700 CPU @ 2.90GHz,max-speed=4800,current-speed=2900"/>
+    <qemu:arg value="-smbios"/>
+    <qemu:arg value="type=17,manufacturer=Samsung,serial=87654321,asset=Not Specified,part=M378A1K43EB2-CWE,speed=3200"/>
+    <!-- ACPI fake battery SSDT -->
+    <qemu:arg value="-acpitable"/>
+    <qemu:arg value="file=/home/user/abrampah/vm/acpi/SSDT-fake-battery.aml"/>
+    <!-- Serial/parallel disabled -->
+    <qemu:arg value="-serial"/>
+    <qemu:arg value="none"/>
+    <qemu:arg value="-parallel"/>
+    <qemu:arg value="none"/>
+    <!-- QEMU monitor on Unix socket -->
+    <qemu:arg value="-monitor"/>
+    <qemu:arg value="unix:/tmp/qemu-stealth-monitor.sock,server,nowait"/>
+  </qemu:commandline>
+
+</domain>
