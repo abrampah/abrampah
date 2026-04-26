@@ -9,12 +9,11 @@ $QemuImg    = "C:\Program Files\qemu\qemu-img.exe"
 $DiskImage      = "C:\VMs\win11-stealth.qcow2"
 $DiskImageSizeGB = 80
 
-# Windows 11 ISO — download from https://www.microsoft.com/en-us/software-download/windows11
-$WinISO  = "C:\VMs\isos\Win11_23H2_English_x64.iso"
+# Windows 11 ISO
+$WinISO  = "C:\VMs\isos\Win11_25H2_EnglishInternational_x64_v2.iso"
 
-# VirtIO drivers ISO — download from:
-# https://fedorapeople.org/groups/virt/virtio-win/direct-downloads/latest-virtio/virtio-win.iso
-$VirtioISO = "C:\VMs\isos\virtio-win.iso"
+# VirtIO drivers ISO
+$VirtioISO = "C:\VMs\isos\virtio-win-0.1.285.iso"
 
 # OVMF (UEFI firmware) — single-file mode (-bios flag)
 # edk2-x86_64-vars.fd is not included in the QEMU Windows package,
